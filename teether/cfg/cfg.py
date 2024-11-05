@@ -1,5 +1,6 @@
 import logging
 import networkx as nx
+import time
 from collections import deque
 from teether.cfg.bb import BB
 
@@ -53,7 +54,8 @@ class CFG(object):
         self.iscomplete = True
         links = set()
         stime=time.time()
-        for pred in self.bbs:                
+        bbs = [bb for bb in self.bbs if 0 in bb.ancestors | {bb.start}]
+        for pred in bbs:                
             if not pred.jump_resolved:                                
                 succ_addrs, new_succ_addrs = pred.get_succ_addrs_full(self.valid_jump_targets)
                 for new_succ_path, succ_addr in new_succ_addrs:
@@ -74,8 +76,11 @@ class CFG(object):
             from teether.slicing import backward_slice
             self._dd[ins] = set(i for s in backward_slice(ins) for i in s if i.bb)
         return self._dd[ins]
+    
+    def testAttri(self):
+        return False
 
-    def update_cfg(self, restricted=None, logger=None):
+    def update_cfg(self):
         """
         Updates the CFG and returns whether any new changes were made.
         Returns:
