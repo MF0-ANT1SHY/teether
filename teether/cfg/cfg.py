@@ -15,11 +15,13 @@ class CFG(object):
         self._bb_at = {bb.start: bb for bb in self.bbs}
         self._ins_at = {i.addr: i for bb in self.bbs for i in bb.ins}
         self.root = self._bb_at[0]
-        self.valid_jump_targets = frozenset({bb.start for bb in self.bbs if bb.ins[0].name == 'JUMPDEST'})
+        self.valid_jump_targets = frozenset(
+            {bb.start for bb in self.bbs if bb.ins[0].name == "JUMPDEST"}
+        )
         if fix_xrefs or fix_only_easy_xrefs:
-            try:                
+            try:
                 self._xrefs(fix_only_easy_xrefs)
-            except TimeoutException:                
+            except TimeoutException:
                 raise TimeoutException("Timed out!")
         self._dominators = None
         self._dd = dict()
@@ -31,14 +33,19 @@ class CFG(object):
     def filter_ins(self, names, reachable=False):
         if isinstance(names, str):
             names = [names]
-        
+
         if not reachable:
             return [ins for bb in self.bbs for ins in bb.ins if ins.name in names]
         else:
-            return [ins for bb in self.bbs for ins in bb.ins if ins.name in names and 0 in bb.ancestors | {bb.start}]
+            return [
+                ins
+                for bb in self.bbs
+                for ins in bb.ins
+                if ins.name in names and 0 in bb.ancestors | {bb.start}
+            ]
 
     def _xrefs(self, fix_only_easy_xrefs=False):
-        self._easy_xrefs()        
+        self._easy_xrefs()
         # print(f"iteration is: {self.updated_bbs}")
 
     def _easy_xrefs(self):
@@ -53,15 +60,19 @@ class CFG(object):
     def _hard_xrefs(self):
         self.iscomplete = True
         links = set()
-        stime=time.time()
+        stime = time.time()
         bbs = [bb for bb in self.bbs if 0 in bb.ancestors | {bb.start}]
-        for pred in bbs:                
-            if not pred.jump_resolved:                                
-                succ_addrs, new_succ_addrs = pred.get_succ_addrs_full(self.valid_jump_targets)
+        for pred in bbs:
+            if not pred.jump_resolved:
+                succ_addrs, new_succ_addrs = pred.get_succ_addrs_full(
+                    self.valid_jump_targets
+                )
                 for new_succ_path, succ_addr in new_succ_addrs:
                     if succ_addr not in self._bb_at:
                         logging.warning(
-                            'WARNING, NO BB @ %x (possible successor of BB @ %x)' % (succ_addr, pred.start))
+                            "WARNING, NO BB @ %x (possible successor of BB @ %x)"
+                            % (succ_addr, pred.start)
+                        )
                         continue
                     succ = self._bb_at[succ_addr]
                     pred.add_succ(succ, new_succ_path)
@@ -74,9 +85,10 @@ class CFG(object):
     def data_dependence(self, ins):
         if not ins in self._dd:
             from teether.slicing import backward_slice
+
             self._dd[ins] = set(i for s in backward_slice(ins) for i in s if i.bb)
         return self._dd[ins]
-    
+
     def testAttri(self):
         return False
 
@@ -87,17 +99,17 @@ class CFG(object):
             bool: True if new links were added, False otherwise
         """
         self.iteration += 1
-        
+
         if self.iscomplete:
             return False  # No changes if already complete
-                    
+
         # Update links
         self.newlinks = []
         self._hard_xrefs()
-        
+
         # Return whether new links were added
         return len(self.newlinks) > 0
-        
+
     @property
     def updated_bbs(self):
         """
@@ -108,7 +120,7 @@ class CFG(object):
             res.append(self._bb_at[edge[0]].start)
         res = set(res)
         return res
-    
+
     @property
     def dominators(self):
         if not self._dominators:
@@ -117,50 +129,74 @@ class CFG(object):
 
     def _compute_dominators(self):
         import networkx
+
         g = networkx.DiGraph()
         for bb in self.bbs:
             for succ in bb.succ:
                 g.add_edge(bb.start, succ.start)
-        self._dominators = {self._bb_at[k]: self._bb_at[v] for k, v in networkx.immediate_dominators(g, 0).items()}
+        self._dominators = {
+            self._bb_at[k]: self._bb_at[v]
+            for k, v in networkx.immediate_dominators(g, 0).items()
+        }
 
     def __str__(self):
-        return '\n\n'.join(str(bb) for bb in self.bbs)
+        return "\n\n".join(str(bb) for bb in self.bbs)
 
     def to_dot(self, minimal=False):
-        s = 'digraph g {\n'
-        s += '\tsplines=ortho;\n'
+        s = "digraph g {\n"
+        s += "\tsplines=ortho;\n"
         s += '\tnode[fontname="courier"];\n'
         for bb in sorted(self.bbs):
-            from_block = ''
+            from_block = ""
             if self._dominators:
-                from_block = 'Dominated by: %x<br align="left"/>' % self.dominators[bb].start
-            from_block += 'From: ' + ', '.join('%x' % pred.start for pred in sorted(bb.pred))
+                from_block = (
+                    'Dominated by: %x<br align="left"/>' % self.dominators[bb].start
+                )
+            from_block += "From: " + ", ".join(
+                "%x" % pred.start for pred in sorted(bb.pred)
+            )
             if bb.estimate_constraints is not None:
-                from_block += '<br align="left"/>Min constraints from root: %d' % bb.estimate_constraints
+                from_block += (
+                    '<br align="left"/>Min constraints from root: %d'
+                    % bb.estimate_constraints
+                )
             if bb.estimate_back_branches is not None:
-                from_block += '<br align="left"/>Min back branches to root: %d' % bb.estimate_back_branches
-            to_block = 'To: ' + ', '.join('%x' % succ.start for succ in sorted(bb.succ))
+                from_block += (
+                    '<br align="left"/>Min back branches to root: %d'
+                    % bb.estimate_back_branches
+                )
+            to_block = "To: " + ", ".join("%x" % succ.start for succ in sorted(bb.succ))
             ins_block = '<br align="left"/>'.join(
-                '%4x: %02x %s %s' % (ins.addr, ins.op, ins.name, ins.arg.hex() if ins.arg else '') for ins in bb.ins)
+                "%4x: %02x %s %s"
+                % (ins.addr, ins.op, ins.name, ins.arg.hex() if ins.arg else "")
+                for ins in bb.ins
+            )
             # ancestors = 'Ancestors: %s'%(', '.join('%x'%addr for addr in sorted(a for a in bb.ancestors)))
             # descendants = 'Descendants: %s' % (', '.join('%x' % addr for addr in sorted(a for a in bb.descendants)))
             # s += '\t%d [shape=box,label=<<b>%x</b>:<br align="left"/>%s<br align="left"/>%s<br align="left"/>%s<br align="left"/>>];\n' % (
             #    bb.start, bb.start, ins_block, ancestors, descendants)
             if not minimal:
-                s += '\t%d [shape=box,label=<%s<br align="left"/><b>%x</b>:<br align="left"/>%s<br align="left"/>%s<br align="left"/>>];\n' % (
-                    bb.start, from_block, bb.start, ins_block, to_block)
+                s += (
+                    '\t%d [shape=box,label=<%s<br align="left"/><b>%x</b>:<br align="left"/>%s<br align="left"/>%s<br align="left"/>>];\n'
+                    % (bb.start, from_block, bb.start, ins_block, to_block)
+                )
             else:
                 s += '\t%d [shape=box,label=<%s<br align="left"/>>];\n' % (
-                    bb.start, ins_block)
-        s += '\n'
+                    bb.start,
+                    ins_block,
+                )
+        s += "\n"
         for bb in sorted(self.bbs):
             for succ in sorted(bb.succ):
                 pths = succ.pred_paths[bb]
                 if not minimal:
                     s += '\t%d -> %d [xlabel="%s"];\n' % (
-                        bb.start, succ.start, '|'.join(' -> '.join('%x' % a for a in p) for p in pths))
+                        bb.start,
+                        succ.start,
+                        "|".join(" -> ".join("%x" % a for a in p) for p in pths),
+                    )
                 else:
-                    s += '\t%d -> %d;\n' % (bb.start, succ.start)
+                    s += "\t%d -> %d;\n" % (bb.start, succ.start)
         if self._dd:
             inter_bb = {}
             for k, v in self._dd.items():
@@ -171,9 +207,13 @@ class CFG(object):
             l = len(inter_bb)
             for i, (k, v) in enumerate(inter_bb.items()):
                 for j in v:
-                    s += '\t%d -> %d[color="%.3f 1.0 1.0", weight=10];\n' % (j, k, (1.0 * i) / l)
-                s += '\n'
-        s += '}'
+                    s += '\t%d -> %d[color="%.3f 1.0 1.0", weight=10];\n' % (
+                        j,
+                        k,
+                        (1.0 * i) / l,
+                    )
+                s += "\n"
+        s += "}"
         return s
 
     def trim(self):
@@ -184,22 +224,32 @@ class CFG(object):
             del self._bb_at[addr]
 
     def to_json(self):
-        return {'bbs': [{'start': bb.start,
-                         'succs': [{'start': succ.start, 'paths': list(succ.pred_paths[bb])} for succ in
-                                   sorted(bb.succ)]} for bb in sorted(self.bbs)]}
+        return {
+            "bbs": [
+                {
+                    "start": bb.start,
+                    "succs": [
+                        {"start": succ.start, "paths": list(succ.pred_paths[bb])}
+                        for succ in sorted(bb.succ)
+                    ],
+                }
+                for bb in sorted(self.bbs)
+            ]
+        }
 
     @staticmethod
     def from_json(json_dict, code):
         from .disassembly import disass
+
         bbs = list()
-        for bb_dict in json_dict['bbs']:
-            bbs.append(BB(list(disass(code, bb_dict['start']))))
+        for bb_dict in json_dict["bbs"]:
+            bbs.append(BB(list(disass(code, bb_dict["start"]))))
         cfg = CFG(bbs, fix_xrefs=False)
-        for bb_dict in json_dict['bbs']:
-            bb = cfg._bb_at[bb_dict['start']]
-            for succ_dict in bb_dict['succs']:
-                succ = cfg._bb_at[succ_dict['start']]
-                for path in succ_dict['paths']:
+        for bb_dict in json_dict["bbs"]:
+            bb = cfg._bb_at[bb_dict["start"]]
+            for succ_dict in bb_dict["succs"]:
+                succ = cfg._bb_at[succ_dict["start"]]
+                for path in succ_dict["paths"]:
                     bb.add_succ(succ, path)
         return cfg
 

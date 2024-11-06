@@ -1,6 +1,6 @@
 [
     {
-        "timeout": 300,
-        "from": "./"
+        "timeout": 1800,
+        "from": "/home/shuo/smartbugs-curated/full"
     }
 ]
