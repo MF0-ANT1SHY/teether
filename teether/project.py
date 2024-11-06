@@ -18,12 +18,14 @@ def load(path):
 
 def load_json(path):
     import json
+
     with open(path) as infile:
         return Project.from_json(json.load(infile))
 
 
 class Project(object):
     def __init__(self, code, cfg=None):
+        self.name = "default"
         self.code = code
         self._prg = None
         self._cfg = cfg
@@ -52,12 +54,12 @@ class Project(object):
         return self._prg
 
     def to_json(self):
-        return {'code': self.code.hex(), 'cfg': self.cfg.to_json()}
+        return {"code": self.code.hex(), "cfg": self.cfg.to_json()}
 
     @staticmethod
     def from_json(json_dict):
-        code = bytes.fromhex(json_dict['code'])
-        cfg = CFG.from_json(json_dict['cfg'], code)
+        code = bytes.fromhex(json_dict["code"])
+        cfg = CFG.from_json(json_dict["cfg"], code)
         return Project(code, cfg)
 
     def run(self, program):
@@ -66,46 +68,58 @@ class Project(object):
     def run_symbolic(self, path, inclusive=False):
         return run_symbolic(self.prg, path, self.code, inclusive=inclusive)
 
-    def get_constraints(self, instructions, args=None, inclusive=False, find_sstore=False):
+    def get_constraints(
+        self, instructions, args=None, inclusive=False, find_sstore=False
+    ):
         # only check instructions that have a chance to reach root
-        instructions = [ins for ins in instructions if 0 in ins.bb.ancestors | {ins.bb.start}]
+        instructions = [
+            ins for ins in instructions if 0 in ins.bb.ancestors | {ins.bb.start}
+        ]
         if not instructions:
             return
         imap = {ins.addr: ins for ins in instructions}
 
         exp = ForwardExplorer(self.cfg)
         if args:
-            slices = [s + (ins,) for ins in instructions for s in interesting_slices(ins, args, reachable=True)]
+            slices = [
+                s + (ins,)
+                for ins in instructions
+                for s in interesting_slices(ins, args, reachable=True)
+            ]
         else:
             # Are we looking for a state-changing path?
             if find_sstore:
-                sstores = self.cfg.filter_ins('SSTORE', reachable=True)
+                sstores = self.cfg.filter_ins("SSTORE", reachable=True)
                 slices = [(sstore, ins) for sstore in sstores for ins in instructions]
             else:
                 slices = [(ins,) for ins in instructions]
         for path in exp.find(slices, avoid=external_data):
-            logging.debug('Path %s', ' -> '.join('%x' % p for p in path))
+            logging.debug("Path %s", " -> ".join("%x" % p for p in path))
             try:
                 ins = imap[path[-1]]
                 yield ins, path, self.run_symbolic(path, inclusive)
             except IntractablePath as e:
-                bad_path = [i for i in e.trace if i in self.cfg._bb_at] + [e.remainingpath[0]]
+                bad_path = [i for i in e.trace if i in self.cfg._bb_at] + [
+                    e.remainingpath[0]
+                ]
                 dd = self.cfg.data_dependence(self.cfg._ins_at[e.trace[-1]])
-                if not any(i.name in ('MLOAD', 'SLOAD') for i in dd):
+                if not any(i.name in ("MLOAD", "SLOAD") for i in dd):
                     ddbbs = set(i.bb.start for i in dd)
-                    bad_path_start = next((j for j, i in enumerate(bad_path) if i in ddbbs), 0)
+                    bad_path_start = next(
+                        (j for j, i in enumerate(bad_path) if i in ddbbs), 0
+                    )
                     bad_path = bad_path[bad_path_start:]
-                logging.info("Bad path: %s" % (', '.join('%x' % i for i in bad_path)))
+                logging.info("Bad path: %s" % (", ".join("%x" % i for i in bad_path)))
                 exp.add_to_blacklist(bad_path)
                 continue
             except ExternalData:
                 continue
             except Exception as e:
-                logging.exception('Failed path due to %s', e)
+                logging.exception("Failed path due to %s", e)
                 continue
 
     def _analyze_writes(self):
-        sstore_ins = self.filter_ins('SSTORE')
+        sstore_ins = self.filter_ins("SSTORE")
         self._writes = defaultdict(set)
         for store in sstore_ins:
             for bs in interesting_slices(store):
@@ -115,7 +129,7 @@ class Project(object):
                 try:
                     r = run_symbolic(prg, path, self.code, inclusive=True)
                 except IntractablePath:
-                    logging.exception('Intractable Path while analyzing writes')
+                    logging.exception("Intractable Path while analyzing writes")
                     continue
                 addr = r.state.stack[-1]
                 if concrete(addr):

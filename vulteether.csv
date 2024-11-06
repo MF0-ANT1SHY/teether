@@ -1,0 +1,5 @@
+time,contract,path
+1730852964.0525634,access_control.wallet_04_confused_sign_sol_Wallet.hex,"[{'index': 0, 'path': [0, 12, 13, 92, 104, 214, 292, 340]}]"
+1730852964.6324031,access_control.proxy_sol_Proxy.hex,"[{'index': 0, 'path': [0, 13, 70, 82, 207, 249, 276, 321, 337]}]"
+1730852965.9609725,bad_randomness.guess_the_random_number_sol_GuessTheRandomNumberChallenge.hex,"[{'index': 0, 'path': [0, 13, 81, 163, 185, 214, 269]}]"
+1730852966.9457886,access_control.simple_suicide_sol_SimpleSuicide.hex,"[{'index': 0, 'path': [0, 12, 68, 79, 88, 112]}]"
