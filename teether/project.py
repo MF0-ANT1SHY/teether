@@ -24,7 +24,9 @@ def load_json(path):
 
 class Project(object):
     def __init__(self, code, cfg=None):
-        self.name = 'Default'
+        self.filename = ''
+        self.starttime = 0
+        self.name = "default"
         self.code = code
         self._prg = None
         self._cfg = cfg
