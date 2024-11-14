@@ -59,7 +59,6 @@ class CFG(object):
 
     def _hard_xrefs(self):
         self.iscomplete = True
-        links = set()
         stime = time.time()
         bbs = [bb for bb in self.bbs if 0 in bb.ancestors | {bb.start}]
         for pred in bbs:
@@ -76,9 +75,8 @@ class CFG(object):
                         continue
                     succ = self._bb_at[succ_addr]
                     pred.add_succ(succ, new_succ_path)
-                    if not (pred.start, succ.start) in links:
+                    if not self._links.has_edge(pred.start, succ.start):
                         self.iscomplete = False
-                        links.add((pred.start, succ.start))
                         self._links.add_edge(pred.start, succ.start)
                         self.newlinks.append((pred.start, succ.start))
 
